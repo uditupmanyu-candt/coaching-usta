@@ -4164,3 +4164,9 @@ User decision: consistency over 4–28px parity — **removed** `inset`, `inset-
     can't be deleted from here — remove them in the editor/DA.
 - Gates: lint 0 errors · breakpoints ✓ · svg ✓ · overflow ✓ (4 pages, home, 15 samples) · typography ✓ (4 pages,
   home) · a11y ✓ (4 pages, 15 samples).
+
+## 2026-10-28 — Experimentation plugin (aem-experimentation)
+- Vendored `plugins/experimentation/src` (copy, not git subtree) + `scripts/experiment-loader.js` (from the plugin README); wired `runExperimentation` (loadEager) and `runExperimentationLazy` (loadLazy) in `scripts/scripts.js`.
+- Loader is a no-op on pages without `Experiment`/`Campaign`/`Audience` metadata.
+- Audiences: only `desktop` (`innerWidth >= 1024`) — Breakpoint Rule forbids `<` checks; no-match = mobile/default.
+- Skipped: `head.html` modulepreload and `aem.js` RUM-sampling tweak (untouchable files); `prodHost` is `www.ustacoaching.com`; Sidekick "Experimentation" button added in `tools/sidekick/config.json`.

@@ -15,6 +15,17 @@ import {
   toCamelCase,
   toClassName,
 } from './aem.js';
+import {
+  runExperimentation,
+  runExperimentationLazy,
+} from './experiment-loader.js';
+
+const experimentationConfig = {
+  prodHost: 'www.ustacoaching.com',
+  audiences: {
+    desktop: () => window.innerWidth >= 1024,
+  },
+};
 
 if (window.trustedTypes && window.trustedTypes.createPolicy) {
   const innerTT = window.trustedTypes.createPolicy('tt-inner', {
@@ -339,6 +350,7 @@ async function loadEager(doc) {
   const main = doc.querySelector('main');
   if (main) applyInlineMetadata(main);
   decorateTemplateAndTheme();
+  await runExperimentation(doc, experimentationConfig);
   if (main) {
     await loadTemplate(main);
     decorateMain(main);
@@ -372,6 +384,7 @@ async function loadLazy(doc) {
   if (hash && element) element.scrollIntoView();
 
   loadFooter(doc.querySelector('body > footer'));
+  await runExperimentationLazy(doc, experimentationConfig);
 
   loadCSS(`${window.hlx.codeBasePath}/styles/lazy-styles.css`);
   loadFonts();
