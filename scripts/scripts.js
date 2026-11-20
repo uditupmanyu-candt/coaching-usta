@@ -16,6 +16,13 @@ import {
   toClassName,
 } from './aem.js';
 
+import {
+  setupMartech,
+  martechEager,
+  martechLazy,
+  martechDelayed,
+} from './martech.js';
+
 if (window.trustedTypes && window.trustedTypes.createPolicy) {
   const innerTT = window.trustedTypes.createPolicy('tt-inner', {
     createHTML: (s) => s, // avoid stack overflow
@@ -338,12 +345,17 @@ async function loadEager(doc) {
   document.documentElement.lang = 'en';
   const main = doc.querySelector('main');
   if (main) applyInlineMetadata(main);
+  // needs the page metadata (e.g. `target`), so after applyInlineMetadata
+  setupMartech();
   decorateTemplateAndTheme();
   if (main) {
     await loadTemplate(main);
     decorateMain(main);
     document.body.classList.add('appear');
-    await loadSection(main.querySelector('.section'), waitForFirstImage);
+    await Promise.all([
+      martechEager(),
+      loadSection(main.querySelector('.section'), waitForFirstImage),
+    ]);
   }
 
   try {
@@ -372,6 +384,7 @@ async function loadLazy(doc) {
   if (hash && element) element.scrollIntoView();
 
   loadFooter(doc.querySelector('body > footer'));
+  await martechLazy();
 
   loadCSS(`${window.hlx.codeBasePath}/styles/lazy-styles.css`);
   loadFonts();
@@ -384,7 +397,10 @@ async function loadLazy(doc) {
 function loadDelayed() {
   import('./consent-check.js');
   // load third-party martech (chat, etc.) well after LCP — see scripts/delayed.js
-  window.setTimeout(() => import('./delayed.js'), 3000);
+  window.setTimeout(() => {
+    martechDelayed();
+    import('./delayed.js');
+  }, 3000);
   // load anything that can be postponed to the latest here
 }
 

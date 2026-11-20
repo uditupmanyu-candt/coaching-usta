@@ -1,2 +1,4 @@
 helix-importer-ui
 *.min.js
+# vendored subtree (git subtree add), not linted here
+plugins/

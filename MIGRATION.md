@@ -4164,3 +4164,20 @@ User decision: consistency over 4–28px parity — **removed** `inset`, `inset-
     can't be deleted from here — remove them in the editor/DA.
 - Gates: lint 0 errors · breakpoints ✓ · svg ✓ · overflow ✓ (4 pages, home, 15 samples) · typography ✓ (4 pages,
   home) · a11y ✓ (4 pages, 15 samples).
+
+## 2026-11-20 — Martech: Web SDK (Target + Analytics) via aem-martech
+- Replaced the Launch-script approach with the vendored **aem-martech** plugin (`plugins/martech`, git subtree) loading
+  the AEP Web SDK + ACDL in the eager / lazy / delayed phases. All project config is in **`scripts/martech.js`**;
+  `scripts.js` only calls `setupMartech()` (start of `loadEager`), `martechEager()` (awaited with the first section),
+  `martechLazy()` (after footer) and `martechDelayed()` (the 3s delayed timeout).
+- **No-op until configured:** fill `DATASTREAM_ID` + `ORG_ID` in `scripts/martech.js` (datastream needs the Adobe
+  Analytics + Target services enabled). Optional Tags containers go in `LAUNCH_URLS` (loaded in delayed).
+- **Target** runs only on pages with a `target` metadata value (any value); other pages still get Analytics.
+  **Analytics** page view fires in lazy (or after personalization when Target is on). Page context (pageName, channel,
+  eVar1 language, eVar2 template) is added in `addPageContext`; adjust to the report suite's eVar/prop map.
+- **Consent:** the dummy `scripts/consent-check.js` fires `consent.update`, mapped to `updateUserConsent`. SDK default
+  is `pending` (events queue). Replace with the real CMP when chosen. `?consent=accept` to test.
+- **Deviation (Untouchable-Files Rule):** `head.html` was edited to add the plugin's preload/preconnect hints, as the
+  plugin's install steps require. They are harmless but wasted bytes while unconfigured.
+- `plugins/` added to `.eslintignore` (vendored code).
+- Custom events: `trackEvent(name, xdm, data)` from `scripts/martech.js`.
