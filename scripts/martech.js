@@ -9,12 +9,16 @@
  *   websdk.datastreamId datastream UUID
  *   websdk.orgId        <org id>@AdobeOrg
  *   websdk.edgeDomain   optional first-party Edge domain (CNAME), e.g. data.example.com
- *   websdk.launchUrls   optional Tags container URL(s), https, comma separated
+ *
+ * and, in the `delayed` tab, the Tags (Launch) container:
+ *
+ *   script.launch       https URL of the Launch library (loaded after consent when required;
+ *                       independent of websdk.enabled)
  *
  * scripts.js only calls the phase functions below:
  *   eager   -> martechEager()   personalization (Target), no content flicker
  *   lazy    -> martechLazy()    Analytics page view + Adobe Client Data Layer
- *   delayed -> martechDelayed() optional Launch/Tags containers
+ *   delayed -> martechDelayed() Launch/Tags container (`script.launch`)
  *
  * If the sheet, the row or a value is missing or invalid, every function here is a
  * no-op (one console warning names the problem) and the site runs unchanged.
@@ -26,7 +30,6 @@ import {
   updateUserConsent,
   martechEager as pluginEager,
   martechLazy as pluginLazy,
-  martechDelayed as pluginDelayed,
   pushEventToDataLayer,
 } from '../plugins/martech/src/index.js';
 /* eslint-enable import/no-relative-packages */
@@ -46,9 +49,16 @@ const RULES = {
 let setupPromise;
 let enabled = false;
 
+// Remember the latest consent signal from the moment this module loads, so scripts
+// that start later (the delayed phase) still see an event that fired earlier.
+window.hlx ??= {};
+window.addEventListener('consent.update', (ev) => {
+  window.hlx.consent = { consented: !!ev.detail?.consented };
+});
+
 function warn(message) {
   // eslint-disable-next-line no-console
-  console.warn(`[martech] websdk: ${message}`);
+  console.warn(`[martech] ${message}`);
 }
 
 /**
@@ -71,10 +81,6 @@ function readSettings(sheet) {
   if (edgeDomain && !/^([a-z0-9-]+\.)+[a-z]{2,}$/i.test(edgeDomain)) {
     problems.push(`invalid value for "${PREFIX}edgeDomain"`);
   }
-  const launchUrls = value('launchUrls').split(',').map((u) => u.trim()).filter(Boolean);
-  if (launchUrls.some((u) => !u.startsWith('https://'))) {
-    problems.push(`"${PREFIX}launchUrls" must be https URLs`);
-  }
   if (problems.length) {
     warn(`${problems.join(', ')} — not loaded`);
     return null;
@@ -83,7 +89,6 @@ function readSettings(sheet) {
     datastreamId: value('datastreamId'),
     orgId: value('orgId'),
     edgeDomain,
-    launchUrls,
   };
 }
 
@@ -146,7 +151,6 @@ async function configure() {
         // Target only runs on pages that opt in with the `target` metadata (any value)
         personalization: !!getMetadata('target'),
         analytics: true,
-        launchUrls: settings.launchUrls,
         // decisionScopes: ['my-scope'], // extra Target mboxes besides __view__
       },
     );
@@ -184,10 +188,49 @@ export async function martechLazy() {
   if (enabled) await pluginLazy();
 }
 
-/** Delayed phase: Launch containers. */
+/** Resolves once the visitor has consented; never resolves otherwise. */
+function whenConsented() {
+  if (window.hlx.consent?.consented) return Promise.resolve();
+  return new Promise((resolve) => {
+    const listener = (ev) => {
+      if (!ev.detail?.consented) return;
+      window.removeEventListener('consent.update', listener);
+      resolve();
+    };
+    window.addEventListener('consent.update', listener);
+  });
+}
+
+/**
+ * Loads the Tags (Launch) library from the `script.launch` row of the delayed tab, as a
+ * classic script: ES modules run in strict mode, which can break Tags custom code.
+ * Waits for consent when `consentRequired` is true.
+ */
+async function loadLaunch() {
+  const raw = (await getSheet('delayed'))['script.launch'];
+  if (!raw) return;
+  let url;
+  try {
+    url = new URL(raw);
+  } catch {
+    // reported below
+  }
+  if (url?.protocol !== 'https:') {
+    warn('"script.launch" is not a valid https URL — not loaded');
+    return;
+  }
+  if (await isConsentRequired()) await whenConsented();
+  if ([...document.scripts].some((script) => script.src === url.href)) return;
+  const script = document.createElement('script');
+  script.src = url.href;
+  script.async = true;
+  document.head.append(script);
+}
+
+/** Delayed phase: Launch container. */
 export async function martechDelayed() {
   await setupMartech();
-  if (enabled) await pluginDelayed();
+  await loadLaunch();
 }
 
 /**

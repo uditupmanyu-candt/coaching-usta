@@ -4170,8 +4170,21 @@ User decision: consistency over 4–28px parity — **removed** `inset`, `inset-
   the AEP Web SDK + ACDL in the eager / lazy / delayed phases. All project config is in **`scripts/martech.js`**;
   `scripts.js` only calls `setupMartech()` (start of `loadEager`), `martechEager()` (awaited with the first section),
   `martechLazy()` (after footer) and `martechDelayed()` (the 3s delayed timeout).
-- **No-op until configured:** fill `DATASTREAM_ID` + `ORG_ID` in `scripts/martech.js` (datastream needs the Adobe
-  Analytics + Target services enabled). Optional Tags containers go in `LAUNCH_URLS` (loaded in delayed).
+- **Config comes from the DA sheet `/configs/site-config`** (same mechanism as `feature/standard_integrations`:
+  `scripts/site-config.js`, copied unchanged). `scripts/martech.js` reads the `eager` tab, rows
+  `websdk.enabled` (true/false), `websdk.datastreamId` (UUID), `websdk.orgId` (`…@AdobeOrg`), optional
+  `websdk.edgeDomain` (first-party CNAME). Sheet must be
+  previewed/published. Missing sheet/row = feature off; invalid values = one `[martech] websdk:` warning, not loaded.
+- **Consent:** `consentRequired` (same eager-tab row every vendor shares; anything but `false` = required). `false`
+  grants all four Adobe categories at once; `true` waits for `consent.update` / `window.hlx.consent`.
+- Non-Target pages never wait for the sheet before LCP (`martechEager` returns at once); Target pages wait at most
+  2.5s, and the page view is still sent afterwards.
+- **Launch:** the delayed-tab `script.launch` row (https only) is injected as a classic script in the delayed phase,
+  after consent when `consentRequired` is true, independent of `websdk.enabled`. The plugin's `launchUrls` option is
+  not used. CAUTION: the current container still has ECID + AppMeasurement + at.js Target, so running it next to the
+  Web SDK double-counts page views and calls Target twice; use a Tags property without those extensions once the Web SDK is on.
+- The branch's at.js Target / Hotjar loader (`scripts/martech/*`) is NOT ported: `target.*` and `script.hotjar` /
+  `script.googlePlaylibrary` rows are ignored here.
 - **Target** runs only on pages with a `target` metadata value (any value); other pages still get Analytics.
   **Analytics** page view fires in lazy (or after personalization when Target is on). Page context (pageName, channel,
   eVar1 language, eVar2 template) is added in `addPageContext`; adjust to the report suite's eVar/prop map.
@@ -4181,3 +4194,5 @@ User decision: consistency over 4–28px parity — **removed** `inset`, `inset-
   plugin's install steps require. They are harmless but wasted bytes while unconfigured.
 - `plugins/` added to `.eslintignore` (vendored code).
 - Custom events: `trackEvent(name, xdm, data)` from `scripts/martech.js`.
+- Tested in Chromium with the sheet and Edge mocked (valid / no rows / bad UUID / Target page / consent required); a real
+  datastream is still untested. `aem up` rejects this branch name (63-char DNS label) — use a shorter branch locally.
